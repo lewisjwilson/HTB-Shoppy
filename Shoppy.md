@@ -159,4 +159,15 @@ hashcat -m 0 -a 0 -o cracked_hashes hashes /usr/share/wordlists/rockyou.txt
 ```
 
 `-m`: type of hash (0 represents MD5)
+
 `-a`: type of attack (0 represents dictionary attack)
+
+```
+
+Complete...
+cracked_hashes file:
+```
+6ebcea65320589ca4f2f1ce039975995:remembermethisway
+```
+
+This has appears to be for user "John"
