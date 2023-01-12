@@ -162,8 +162,6 @@ hashcat -m 0 -a 0 -o cracked_hashes hashes /usr/share/wordlists/rockyou.txt
 
 `-a`: type of attack (0 represents dictionary attack)
 
-```
-
 Complete...
 cracked_hashes file:
 ```
